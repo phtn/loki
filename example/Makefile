@@ -1,6 +1,5 @@
 run:
-	odin run example -file
+	odin run src/main.odin -file
 b:
-	odin build -out=build/example -file
-rb:
-	./build/example
+	odin build src/main.odin -out=build/$(o) -file
+%!(EXTRA example, example, example)

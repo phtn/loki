@@ -14,17 +14,15 @@ import fetch "external/fetch"
 import colors "external/odin-colors"
 
 
-DEFAULT_MAIN := "package main\n\nimport \"core:fmt\"\n\nmain :: proc() {\n\tfmt.println(\"Let's fucking go!\")\n}"
-MAKEFILE := "run:\n\todin run %s -file\nb:\n\todin build -out=build/%s -file\nrb:\n\t./build/%s"
-README := "README.md"
-PROJECT_DIRS :: []string{"build", "docs", "examples", "scripts", "src", "tests"}
-SRC_DIRS :: []string{"core", "config", "http", "models", "shield", "utils"}
-
+DEFAULT_MAIN := "package main\n\nimport \"core:fmt\"\n\nmain :: proc() {\n\tfmt.println(\"Ready to lock in, anon?\")\n}"
+MAKEFILE := "run:\n\todin run src/main.odin -file\n\nb:\n\t@odin build src/main.odin -out=build/%s -n -file\n\t./build/%s \n\n"
+PROJECT_DIRS :: []string{"build", "vendor", "src", "tests"}
+SRC_DIRS :: []string{"core", "config", "lib"}
+README_GIST_ID :: "ebd078a337c17cbb6484a6f1ba5bffea"
 
 main :: proc() {
 
 	validate_args(os.args)
-	load_env(".env")
 
 	/* [commands] */
 	switch os.args[1] {
@@ -68,31 +66,28 @@ create :: proc() {
 
 	check_project_name(project)
 
-	params := []string{"project", project_name}
+	fmt.printf("\n %s\n", c_title("creating ⋯"))
+	params := []string{"project:", project_name}
 	card.rounded(params)
 
-	fmt.printf(" creating project %s\n", project)
+	fmt.printf(" %s\n", c_title("build started"))
 	make_directory(project)
 	set_current_directory(project)
 
-	makefile := fmt.tprintf(MAKEFILE, project, project, project)
+	makefile := fmt.tprintf(MAKEFILE, project, project)
 	touch("Makefile", makefile)
 
-	readme_id := os.get_env("README_GIST_ID")
-	gist := gist_content(readme_id)
-	// readme, ok := strings.replace(gist, "<project>", project, 1)
+	gist := gist_content(README_GIST_ID)
 	touch("README.md", gist)
 
-
 	mkdirs(PROJECT_DIRS)
+
 	set_current_directory("src")
+	touch("main.odin", DEFAULT_MAIN)
 	mkdirs(SRC_DIRS)
 
-	entry := fmt.tprintf("%s.odin", project)
-	touch(entry, DEFAULT_MAIN)
-	touch("config.odin", "")
 
-	fmt.printf("\n project %s created successfully.\n", project)
+	fmt.printf("\n done.\n\n")
 }
 
 check_project_name :: proc(project: string) {
@@ -109,7 +104,6 @@ mkdirs :: proc(dirs: []string) {
 touch :: proc(filename: string, content: string) {
 	os.write_entire_file(filename, transmute([]byte)content)
 }
-
 cli_version :: proc() {
 	version := fmt.tprintf("%s%s%s", colors.BRIGHT_CYAN, "(ph) version 0.0.2", colors.RESET)
 	fmt.printf("\n%s\n", version)
@@ -120,12 +114,13 @@ c_title :: proc(c: string) -> string {
 run :: proc() {
 	fmt.printf("\n %s %s\n", c_title("run"), "running the project in dev mode...")
 }
-
-
 build :: proc() {
-	fmt.printf("\n %s %s\n", c_title("running ⋯"), "build")
-}
+	fmt.printf("\n %s %s\n", c_title("creating ⋯"), "project")
 
+	params := []string{"name"}
+	card.rounded(params)
+
+}
 help :: proc() {
 	print_usage()
 }
@@ -199,10 +194,6 @@ write_from_file :: proc(from: string, to: string) {
 }
 
 
-test :: proc() {
-	fmt.printf("\n %s %s\n", c_title("running ⋯"), "test")
-}
-
 gist_content :: proc(id: string) -> string {
 
 	content: string
@@ -243,9 +234,6 @@ parse_gist :: proc(data: string) -> string {
 	}
 
 
-	// fmt.printfln(" filename:\t%s", filename)
-	// fmt.printfln(" content:\t\n\n%s", content)
-
 	defer json.destroy_value(json_v)
 	return content.(json.String)
 }
@@ -255,29 +243,100 @@ not_empty :: proc(data: string) -> bool {
 	return ok
 }
 
-load_env :: proc(file_path: string) {
-	data, ok := os.read_entire_file(file_path)
+Env :: struct {
+	key:   string,
+	value: string,
+}
+
+load_env :: proc() -> [dynamic]Env {
+
+	vars := make([dynamic]Env)
+
+	data, ok := os.read_entire_file(".env")
+	defer delete(data)
+
 	if !ok {
-	   fmt.printf(" Error loading environment vars in path: %s\n ERR: %v\n", file_path)
+		fmt.eprintf(" Error loading environment vars in path: %s\n ERR: %v\n", ".env")
 	}
 
 	lines := strings.split_lines(string(data))
-	for &line in lines {
+	for line in lines {
 		// Ignore empty lines and comments
-		line = strings.trim(line, " ")
-		if line == "" || line[0] == '#' {
+		line := strings.trim_space(line)
+		if line == "" || strings.has_prefix(line, "#") {
 			continue
 		}
 
 		// Split key and value
-		key_value := strings.split(line, "=")
-		if len(key_value) < 2 {
-			continue // Ignore lines without a valid key-value pair
+		parts := strings.split(line, "=")
+		defer delete(parts)
+
+		if len(parts) >= 2 {
+			key := strings.trim_space(parts[0])
+			value := strings.trim_space(strings.join(parts[1:], "=")) // Handles values with `=` characters
+			value = strings.trim(value, "\"")
+
+			os.set_env(key, value)
+			append(&vars, Env{key, value})
 		}
 
-		key := strings.trim(key_value[0], "\"")
-		value := strings.trim(key_value[1], "\"") // Handles values with `=` characters
 
-		os.set_env(key, value)
 	}
+
+	return vars
+}
+
+test :: proc() {
+	fmt.printf("\n %s %s\n", c_title("running ⋯"), "test")
+	vars := load_envs()
+	for v, i in vars {
+		fmt.printf("pair %d: %s", i + 1, v)
+	}
+}
+
+load_envs :: proc() -> [dynamic]string {
+	vars: [dynamic]string
+
+	// Try to read .env file
+	data, ok := os.read_entire_file(".env")
+	if !ok {
+		fmt.eprintln("Could not read .env file")
+		return vars
+	}
+	defer delete(data)
+
+	// Convert to string and split by lines
+	content := string(data)
+	lines := strings.split(content, "\n")
+	defer delete(lines)
+
+	// Process each line
+	for line in lines {
+		line := strings.trim_space(line)
+		if line == "" || strings.has_prefix(line, "#") {
+			continue
+		}
+
+		// Split by first = character
+		parts := strings.split(line, "=")
+		defer delete(parts)
+
+		if len(parts) >= 2 {
+			key := strings.trim_space(parts[0])
+			// Join remaining parts in case value contains = characters
+			value := strings.trim_space(strings.join(parts[1:], "="))
+
+			// Remove quotes if present
+			value = strings.trim(value, "\"'")
+
+			pairs := fmt.tprintf("%s -> %s\n", key, value)
+			append(&vars, pairs)
+			// Set environment variable
+			os.set_env(key, value)
+
+			// Store in our array
+		}
+	}
+
+	return vars
 }

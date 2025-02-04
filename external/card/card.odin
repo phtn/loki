@@ -24,10 +24,10 @@ t_border :: proc(n: int) {
 }
 
 c_content :: proc(title: []string) {
-	D_H := fmt.tprintf("%s%s%s", colors.BLACK, V_L, colors.RESET)
+	D_H := fmt.tprintf("%s%s", colors.BLACK, colors.RESET)
 	ls: string
 	for i in title {
-		ls = fmt.tprintf("%s%s %s ", ls, i, D_H)
+		ls = fmt.tprintf("%s %s %s", ls, i, D_H)
 	}
 	fmt.println(V_L, ls, V_L)
 }
@@ -38,7 +38,7 @@ b_border :: proc(n: int) {
 }
 
 charcunt :: proc(s: []string) -> int {
-	t := len(s) + 1
+	t := len(s) + 2
 	for i in s {
 		t += strip_ansi(i)
 	}

@@ -4,8 +4,12 @@ run:
 b:
 	odin build ph.odin -out=build/ph -file
 
+dev:
+	@odin build ph.odin -out=build/ph -file
+	./build/ph build
+
 create:
-	./build/ph create $(n)
+	./build/ph create example
 
 testcmd:
 	./build/ph test
@@ -14,7 +18,8 @@ buildcmd:
 	./build/ph build
 
 test:
-	odin test ph.odin -file
+	@odin build ph.odin -out=build/ph -file
+	./build/ph test
 
 clean:
 	rm -rf build
