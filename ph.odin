@@ -128,11 +128,11 @@ help :: proc() {
 print_usage :: proc() {
 	commands := []string{"create", "run", "test", "build", "help"}
 	definitions := []string {
-		"use to create a new project",
-		"to run the project in dev mode",
-		"test to test the project",
-		"build to build the project",
-		"help to get help",
+		"create new project",
+		"run in dev mode",
+		"test the project",
+		"build the project",
+		"help and guide",
 	}
 	header := "\n usage: \n\n"
 	high_b :: proc(text: string) -> string {
