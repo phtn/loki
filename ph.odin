@@ -58,11 +58,8 @@ tmpl_project_name :: proc(name: string) -> string {
 	return fmt.tprintf("%s%s%s", colors.BRIGHT_CYAN, name, colors.RESET)
 }
 create :: proc() {
-	using os
-
 	project_name := tmpl_project_name(os.args[2])
 	project := os.args[2]
-	root_dir := get_current_directory()
 
 	check_project_name(project)
 
@@ -71,8 +68,14 @@ create :: proc() {
 	card.rounded(params)
 
 	fmt.printf(" %s\n", c_title("build started"))
-	make_directory(project)
-	set_current_directory(project)
+	if err := os.make_directory(project); err != nil {
+		fmt.eprintf("Error creating directory %s: %v\n", project, err)
+		os.exit(1)
+	}
+	if err := os.set_working_directory(project); err != nil {
+		fmt.eprintf("Error entering directory %s: %v\n", project, err)
+		os.exit(1)
+	}
 
 	makefile := fmt.tprintf(MAKEFILE, project, project)
 	touch("Makefile", makefile)
@@ -82,7 +85,10 @@ create :: proc() {
 
 	mkdirs(PROJECT_DIRS)
 
-	set_current_directory("src")
+	if err := os.set_working_directory("src"); err != nil {
+		fmt.eprintf("Error entering directory src: %v\n", err)
+		os.exit(1)
+	}
 	touch("main.odin", DEFAULT_MAIN)
 	mkdirs(SRC_DIRS)
 
@@ -98,11 +104,17 @@ check_project_name :: proc(project: string) {
 }
 mkdirs :: proc(dirs: []string) {
 	for d in dirs {
-		os.make_directory(d)
+		if err := os.make_directory(d); err != nil {
+			fmt.eprintf("Error creating directory %s: %v\n", d, err)
+			os.exit(1)
+		}
 	}
 }
 touch :: proc(filename: string, content: string) {
-	os.write_entire_file(filename, transmute([]byte)content)
+	if err := os.write_entire_file(filename, content); err != nil {
+		fmt.eprintf("Error writing file %s: %v\n", filename, err)
+		os.exit(1)
+	}
 }
 cli_version :: proc() {
 	version := fmt.tprintf("%s%s%s", colors.BRIGHT_CYAN, "(ph) version 0.0.2", colors.RESET)
@@ -114,11 +126,30 @@ c_title :: proc(c: string) -> string {
 run :: proc() {
 	fmt.printf("\n %s %s\n", c_title("run"), "running the project in dev mode...")
 }
-build :: proc() {
-	fmt.printf("\n %s %s\n", c_title("creating ⋯"), "project")
+current_project_name :: proc() -> string {
+	cwd, err := os.get_working_directory(context.allocator)
+	if err != nil {
+		fmt.eprintf("Error getting current directory: %v\n", err)
+		os.exit(1)
+	}
+	defer delete(cwd)
 
-	params := []string{"name"}
+	_, project := os.split_path(cwd)
+	project_name, clone_err := strings.clone(project)
+	if clone_err != nil {
+		fmt.eprintf("Error copying project name: %v\n", clone_err)
+		os.exit(1)
+	}
+	return project_name
+}
+build :: proc() {
+	fmt.printf("\n %s %s\n", c_title("building ⋯"), "project")
+
+	project := current_project_name()
+	defer delete(project)
+	params := []string{tmpl_project_name(project)}
 	card.rounded(params)
+	fmt.printf(" %s\n\n", c_title("build complete"))
 
 }
 help :: proc() {
@@ -172,25 +203,35 @@ validate_args :: proc(args: []string) {
 }
 
 write_from_file :: proc(from: string, to: string) {
-	cwd := fmt.tprintf(os.get_current_directory())
+	cwd, cwd_err := os.get_working_directory(context.allocator)
+	if cwd_err != nil {
+		fmt.eprintf("Error getting current directory: %v\n", cwd_err)
+		return
+	}
+	defer delete(cwd)
+
 	path := fmt.tprintf("%s/libs/%s", cwd, from)
 	o_path := fmt.tprintf("%s/%s", cwd, to)
 	handle, err := os.open(path)
 
 	if err != nil {
 		fmt.printf("⛌ Error opening file from path %s: %v\n", path, err)
-	}
-
-	content, rerr := os.read_entire_file_from_handle(handle)
-	if !rerr {
-		fmt.printf("⛌ Error reading file from path %s: %v\n", path, rerr)
-	}
-
-	written := os.write_entire_file(o_path, transmute([]byte)content)
-	if written {
-		fmt.printf("⋯ %s created\n", to)
+		return
 	}
 	defer os.close(handle)
+
+	content, rerr := os.read_entire_file(handle, context.allocator)
+	if rerr != nil {
+		fmt.printf("⛌ Error reading file from path %s: %v\n", path, rerr)
+		return
+	}
+	defer delete(content)
+
+	if werr := os.write_entire_file(o_path, content); werr != nil {
+		fmt.printf("⛌ Error writing file to path %s: %v\n", o_path, werr)
+	} else {
+		fmt.printf("⋯ %s created\n", to)
+	}
 }
 
 
@@ -252,11 +293,11 @@ load_env :: proc() -> [dynamic]Env {
 
 	vars := make([dynamic]Env)
 
-	data, ok := os.read_entire_file(".env")
+	data, err := os.read_entire_file(".env", context.allocator)
 	defer delete(data)
 
-	if !ok {
-		fmt.eprintf(" Error loading environment vars in path: %s\n ERR: %v\n", ".env")
+	if err != nil {
+		fmt.eprintf(" Error loading environment vars in path: %s\n ERR: %v\n", ".env", err)
 	}
 
 	lines := strings.split_lines(string(data))
@@ -298,8 +339,8 @@ load_envs :: proc() -> [dynamic]string {
 	vars: [dynamic]string
 
 	// Try to read .env file
-	data, ok := os.read_entire_file(".env")
-	if !ok {
+	data, err := os.read_entire_file(".env", context.allocator)
+	if err != nil {
 		fmt.eprintln("Could not read .env file")
 		return vars
 	}

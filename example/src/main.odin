@@ -3,5 +3,5 @@ package main
 import "core:fmt"
 
 main :: proc() {
-	fmt.println("Let's fucking go!")
+	fmt.println("Gates to Val Hell Yeah!")
 }
